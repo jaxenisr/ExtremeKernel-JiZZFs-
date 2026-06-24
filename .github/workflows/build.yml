@@ -11,42 +11,49 @@ jobs:
     runs-on: ubuntu-24.04
 
     steps:
-      - name: "⏰Set Time Zone to Beijing"
-        run: |
-          sudo timedatectl set-timezone "Asia/Shanghai"
-      - name: "🚄Set up build environment"
+      - name: "⏰ Set Time Zone to Beijing"
+        run: sudo timedatectl set-timezone "Asia/Shanghai"
+
+      - name: "🚄 Set up build environment"
         run: |
           sudo apt-get update
           sudo apt-get install -y build-essential curl git
-      - name: "⭐Checkout repository with submodules"
+
+      - name: "⭐ Checkout repository (NO submodules)"
         uses: actions/checkout@v4
         with:
-          submodules: true
+          submodules: false
+          fetch-depth: 0
+
+      - name: "💡 Clone KernelSU-Next manually (stable)"
+        run: |
+          rm -rf KernelSU-Next
+          git clone --depth=1 https://github.com/KernelSU-Next/KernelSU-Next KernelSU-Next
 
       - name: "💡 Setup KernelSU-Next"
         run: |
-          if [ -d "./KernelSU-Next" ]; then rm -rf "./KernelSU-Next"; fi
-          if [ -d "./drivers/KernelSU-Next" ]; then rm -rf "./drivers/KernelSU-Next"; fi
           curl -LSs "https://raw.githubusercontent.com/rifsxd/KernelSU-Next/next-susfs/kernel/setup.sh" | bash -s next-susfs-dev
+
       - name: "😄 Setup and Apply susfs4ksu Patches"
         run: |
           set -e
           git clone https://github.com/Star-Seven/susfs4ksu -b new SUSFS
-          #cp susfs4ksu-repo/kernel_patches/KernelSU/10_enable_susfs_for_ksu.patch ./KernelSU-Next/
           cp SUSFS/kernel_patches/fs/* fs/
           cp SUSFS/kernel_patches/include/linux/* include/linux/
           patch -p1 --verbose < SUSFS/kernel_patches/50_add_susfs_in_kernel-4.14.patch
           patch -p1 --verbose < SUSFS/kernel_patches/BACKPORT-fs-upstream-susfs-v1.5.7-new-non-gki.patch
           echo "Successfully applied susfs4ksu patches"
-      - name: "🐎Build for specific device"
+
+      - name: "🐎 Build for specific device"
         run: ./build.sh -m ${{ matrix.device }} -k y
 
-      - name: "💫Prepare ZIP files for upload"
+      - name: "💫 Prepare ZIP files for upload"
         run: |
           mkdir -p ${{ github.workspace }}/build/out/zip_files
           find ${{ github.workspace }}/build/out/ -type f -name "*.zip" -exec cp {} ${{ github.workspace }}/build/out/zip_files/ \;
-      - name: "😎Upload ZIP files as artifact"
+
+      - name: "😎 Upload ZIP files as artifact"
         uses: actions/upload-artifact@v4
         with:
-         name: "${{ matrix.device }}-KernelSU-Susfs"
-         path: ${{ github.workspace }}/build/out/zip_files/
+          name: "${{ matrix.device }}-KernelSU-Susfs"
+          path: ${{ github.workspace }}/build/out/zip_files/
